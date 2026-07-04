@@ -192,6 +192,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SERVER_PASSWORD=serverPasswordHere \
     PUBLIC_PORT=8211 \
     PUBLIC_IP= \
+    QUERY_PORT=27015 \
     RCON_ENABLED=true \
     RCON_PORT=25575 \
     REGION= \

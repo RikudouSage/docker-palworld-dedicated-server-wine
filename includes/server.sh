@@ -35,6 +35,10 @@ function start_server() {
         e "> Setting Multi-Core-Enhancements to enabled"
         START_OPTIONS+=("-useperfthreads" "-NoAsyncLoadingThread" "-UseMultithreadForDS")
     fi
+    if [[ -n ${QUERY_PORT+x} ]]; then
+        e "> Setting Query-Port to '$QUERY_PORT'"
+        START_OPTIONS+=("-queryport=$QUERY_PORT")
+    fi
     if [[ -n $WEBHOOK_ENABLED ]] && [[ $WEBHOOK_ENABLED == "true" ]]; then
         send_start_notification
     fi

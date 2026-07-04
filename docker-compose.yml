@@ -25,7 +25,7 @@ services:
         published: 25575 # RCON port on your host
         protocol: tcp
         mode: host
-      - target: 27015 # Query port inside of the container
+      - target: 27015 # Query port inside of the container (must match QUERY_PORT)
         published: 27015 # Query port on your host
         protocol: tcp
     env_file:
