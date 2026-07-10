@@ -1,27 +1,9 @@
-FROM golang:1.22.0-bookworm AS rconclibuilder
-
-WORKDIR /build
-
-ENV CGO_ENABLED=0 \
-    GORCON_RCONCLI_URL=https://github.com/gorcon/rcon-cli/archive/refs/tags/v0.10.3.tar.gz \
-    GORCON_RCONCLI_DIR=rcon-cli-0.10.3 \
-    GORCON_RCONCLI_TGZ=v0.10.3.tar.gz \
-    GORCON_RCONCLI_TGZ_SHA1SUM=33ee8077e66bea6ee097db4d9c923b5ed390d583
-
-RUN curl -fsSLO "$GORCON_RCONCLI_URL" \
-    && echo "${GORCON_RCONCLI_TGZ_SHA1SUM}  ${GORCON_RCONCLI_TGZ}" | sha1sum -c - \
-    && tar -xzf "$GORCON_RCONCLI_TGZ" \
-    && mv "$GORCON_RCONCLI_DIR"/* ./ \
-    && rm "$GORCON_RCONCLI_TGZ" \
-    && rm -Rf "$GORCON_RCONCLI_DIR" \
-    && go build -v ./cmd/gorcon
-
-FROM debian:bookworm-slim AS supercronicverify
+FROM debian:bookworm-slim@sha256:96e378d7e6531ac9a15ad505478fcc2e69f371b10f5cdf87857c4b8188404716 AS supercronicverify
 
 # Latest releases available at https://github.com/aptible/supercronic/releases
-ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.29/supercronic-linux-amd64 \
-    SUPERCRONIC=supercronic-linux-amd64 \
-    SUPERCRONIC_SHA1SUM=cd48d45c4b10f3f0bfdd3a57d054cd05ac96812b
+ENV SUPERCRONIC_URL=https://github.com/aptible/supercronic/releases/download/v0.2.46/supercronic-linux-amd64 \
+    SUPERCRONIC_SHA1SUM=5bcefed628e32adc08e32634db2d10e9230dbca0 \
+    SUPERCRONIC=supercronic-linux-amd64
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests ca-certificates curl \
@@ -35,12 +17,9 @@ RUN curl -fsSLO "$SUPERCRONIC_URL" \
     && mv "$SUPERCRONIC" "/usr/local/bin/${SUPERCRONIC}" \
     && ln -s "/usr/local/bin/${SUPERCRONIC}" /usr/local/bin/supercronic
 
+FROM cm2network/steamcmd:root@sha256:e6b6b3503bf0e41feafe12dc709c90151afba193e1292cac55d28a7d470b1493
 
-FROM cm2network/steamcmd:root
 
-#LABEL maintainer="Sebastian Schmidt - https://github.com/jammsen/docker-palworld-dedicated-server"
-#LABEL org.opencontainers.image.authors="Sebastian Schmidt"
-#LABEL org.opencontainers.image.source="https://github.com/jammsen/docker-palworld-dedicated-server"
 LABEL maintainer="Ripps - https://github.com/ripps818/docker-palworld-dedicated-server-wine"
 LABEL org.opencontainers.image.authors="Ripps"
 LABEL org.opencontainers.image.source="https://github.com/ripps818/docker-palworld-dedicated-server-wine"
@@ -56,7 +35,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GAME_SETTINGS_FILE="/palworld/Pal/Saved/Config/WindowsServer/PalWorldSettings.ini" \
     GAME_ENGINE_FILE="/palworld/Pal/Saved/Config/WindowsServer/Engine.ini" \
     STEAMCMD_PATH="/home/steam/steamcmd" \
-    RCON_CONFIG_FILE="/home/steam/steamcmd/rcon.yaml" \
     PALWORLD_TEMPLATE_FILE="/PalWorldSettings.ini.template" \
     BACKUP_PATH="/palworld/backups" \
     # Container-setttings
@@ -86,11 +64,19 @@ ENV DEBIAN_FRONTEND=noninteractive \
     RESTART_ANNOUNCE_MESSAGES_ENABLED=true \
     RESTART_DEBUG_OVERRIDE=false \
     RESTART_CRON_EXPRESSION="0 18 * * *" \
+    # Player Detection - NEEDS REST API ENABLED!
+    PLAYER_DETECTION_ENABLED=true \
+    PLAYER_DETECTION_DEBUG=false \
+    PLAYER_DETECTION_STARTUP_DELAY=60 \
+    PLAYER_DETECTION_CHECK_INTERVAL=15 \
     # RCON-Playerdetection - NEEDS RCON ENABLED!
     RCON_PLAYER_DETECTION=true \
     RCON_PLAYER_DEBUG=false \
     RCON_PLAYER_DETECTION_STARTUP_DELAY=60 \
     RCON_PLAYER_DETECTION_CHECK_INTERVAL=15 \
+    # Custom-script-settings
+    CUSTOM_SCRIPT_ENABLED=false \
+    CUSTOM_SCRIPT_PATH="/palworld/custom-script.sh" \
     # Webhook-settings
     WEBHOOK_ENABLED=false \
     WEBHOOK_DEBUG_ENABLED=false \
@@ -115,27 +101,72 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WEBHOOK_UPDATE_TITLE="Updating server" \
     WEBHOOK_UPDATE_DESCRIPTION="Server is being updated" \
     WEBHOOK_UPDATE_COLOR="2849520" \
+    WEBHOOK_AUTO_UPDATE_FAILED_TITLE="Failed checking for updates" \
+    WEBHOOK_AUTO_UPDATE_FAILED_DESCRIPTION="The steam api could not be reached to check for new versions. That can happen from time to time and shouldn't be a problem unless it happens regularly." \
+    WEBHOOK_AUTO_UPDATE_FAILED_COLOR="10038562" \
     # Config-setting - Warning: Every setting below here will be affected!
     SERVER_SETTINGS_MODE=manual \
     # Gameserver-start-settings
-    MULTITHREAD_ENABLED=true \
+    MULTITHREAD_ENABLED=false \
     COMMUNITY_SERVER=true \
     # Engine.ini settings
     NETSERVERMAXTICKRATE=120 \
-    # PalWorldSettings.ini settings
+    # PalWorldSettings.ini - General Server Settings
+    SERVER_NAME="wine-docker-generated-###RANDOM###" \
+    SERVER_DESCRIPTION="Palworld-Wine-Server running in Docker by ripps" \
+    ADMIN_PASSWORD=adminPasswordHere \
+    SERVER_PASSWORD=serverPasswordHere \
+    PUBLIC_IP= \
+    PUBLIC_PORT=8211 \
+    QUERY_PORT=27015 \
+    MAX_PLAYERS=32 \
+    COOP_PLAYER_MAX_NUM=4 \
+    ALLOW_CLIENT_MOD=true \
+    RCON_ENABLED=false \
+    RCON_PORT=25575 \
+    RESTAPI_ENABLED=true \
+    RESTAPI_PORT=8212 \
+    RESTAPI_TIMEOUT=10 \
+    REGION= \
+    USEAUTH=true \
+    BAN_LIST_URL=https://api.palworldgame.com/api/banlist.txt \
+    SHOW_PLAYER_LIST=false \
+    CHAT_POST_LIMIT_PER_MINUTE=10 \
+    CROSSPLAY_PLATFORMS="(Steam,Xbox,PS5,Mac)" \
+    SHOW_JOIN_LEFT_MESSAGE=true \
+    # PalWorldSettings.ini - Gameplay & Difficulty
     DIFFICULTY=None \
-    RANDOMIZER_TYPE=None \
-    RANDOMIZER_SEED="" \ 
-    IS_RANDOMIZER_PAL_LEVEL_RANDOM=false \
     DAYTIME_SPEEDRATE=1.000000 \
     NIGHTTIME_SPEEDRATE=1.000000 \
     EXP_RATE=1.000000 \
     PAL_CAPTURE_RATE=1.000000 \
     PAL_SPAWN_NUM_RATE=1.000000 \
+    PAL_EGG_DEFAULT_HATCHING_TIME=72.000000 \
+    WORK_SPEED_RATE=1.000000 \
+    HARDCORE=false \
+    PAL_LOST=false \
+    CHARACTER_RECREATE_IN_HARDCORE=false \
+    ENABLE_AIM_ASSIST_PAD=true \
+    ENABLE_AIM_ASSIST_KEYBOARD=false \
+    # PalWorldSettings.ini - Combat & PvP
+    IS_PVP=false \
+    ENABLE_PLAYER_TO_PLAYER_DAMAGE=false \
+    ENABLE_FRIENDLY_FIRE=false \
+    DEATH_PENALTY=All \
+    ENABLE_INVADER_ENEMY=true \
+    ACTIVE_UNKO=false \
     PAL_DAMAGE_RATE_ATTACK=1.000000 \
     PAL_DAMAGE_RATE_DEFENSE=1.000000 \
     PLAYER_DAMAGE_RATE_ATTACK=1.000000 \
     PLAYER_DAMAGE_RATE_DEFENSE=1.000000 \
+    ENABLE_DEFENSE_OTHER_GUILD_PLAYER=false \
+    DISPLAY_PVP_ITEM_NUM_ON_WORLD_MAP_BASE_CAMP=false \
+    DISPLAY_PVP_ITEM_NUM_ON_WORLD_MAP_PLAYER=false \
+    ADDITIONAL_DROP_ITEM_WHEN_PLAYER_KILLING_IN_PVP_MODE="PlayerDropItem" \
+    ADDITIONAL_DROP_ITEM_NUM_WHEN_PLAYER_KILLING_IN_PVP_MODE=1 \
+    ENABLE_ADDITIONAL_DROP_ITEM_WHEN_PLAYER_KILLING_IN_PVP_MODE=false \
+    ENABLE_PREDATOR_BOSS_PAL=true \
+    # PalWorldSettings.ini - Survival & Character
     PLAYER_STOMACH_DECREASE_RATE=1.000000 \
     PLAYER_STAMINA_DECREACE_RATE=1.000000 \
     PLAYER_AUTO_HP_REGENE_RATE=1.000000 \
@@ -144,75 +175,61 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PAL_STAMINA_DECREACE_RATE=1.000000 \
     PAL_AUTO_HP_REGENE_RATE=1.000000 \
     PAL_AUTO_HP_REGENE_RATE_IN_SLEEP=1.000000 \
+    EXIST_PLAYER_AFTER_LOGOUT=false \
+    ENABLE_NON_LOGIN_PENALTY=true \
+    ALLOW_ENHANCE_STAT_HEALTH=true \
+    ALLOW_ENHANCE_STAT_ATTACK=true \
+    ALLOW_ENHANCE_STAT_STAMINA=true \
+    ALLOW_ENHANCE_STAT_WEIGHT=true \
+    ALLOW_ENHANCE_STAT_WORK_SPEED=true \
+    # PalWorldSettings.ini - Base Building & Guilds
+    BASE_CAMP_MAX_NUM=128 \
+    BASE_CAMP_WORKER_MAXNUM=15 \
+    BASE_CAMP_MAX_NUM_IN_GUILD=4 \
+    GUILD_PLAYER_MAX_NUM=20 \
+    AUTO_RESET_GUILD_NO_ONLINE_PLAYERS=false \
+    AUTO_RESET_GUILD_TIME_NO_ONLINE_PLAYERS=72.000000 \
+    GUILD_REJOIN_COOLDOWN_MINUTES=0 \
     BUILD_OBJECT_HP_RATE=1.000000 \
     BUILD_OBJECT_DAMAGE_RATE=1.000000 \
     BUILD_OBJECT_DETERIORATION_DAMAGE_RATE=1.000000 \
+    MAX_BUILDING_LIMIT_NUM=0 \
+    BUILD_AREA_LIMIT=false \
+    INVISBIBLE_OTHER_GUILD_BASE_CAMP_AREA_FX=false \
+    # PalWorldSettings.ini - Items & Inventory
     COLLECTION_DROP_RATE=1.000000 \
     COLLECTION_OBJECT_HP_RATE=1.000000 \
     COLLECTION_OBJECT_RESPAWN_SPEED_RATE=1.000000 \
     ENEMY_DROP_ITEM_RATE=1.000000 \
-    DEATH_PENALTY=All \
-    ENABLE_PLAYER_TO_PLAYER_DAMAGE=false \
-    ENABLE_FRIENDLY_FIRE=false \
-    ENABLE_INVADER_ENEMY=true \
-    ACTIVE_UNKO=false \
-    ENABLE_AIM_ASSIST_PAD=true \
-    ENABLE_AIM_ASSIST_KEYBOARD=false \
     DROP_ITEM_MAX_NUM=3000 \
     DROP_ITEM_MAX_NUM_UNKO=100 \
-    BASE_CAMP_MAX_NUM=128 \
-    BASE_CAMP_WORKER_MAXNUM=15 \
     DROP_ITEM_ALIVE_MAX_HOURS=1.000000 \
-    AUTO_RESET_GUILD_NO_ONLINE_PLAYERS=false \
-    AUTO_RESET_GUILD_TIME_NO_ONLINE_PLAYERS=72.000000 \
-    GUILD_PLAYER_MAX_NUM=20 \
-    BASE_CAMP_MAX_NUM_IN_GUILD=4 \
-    PAL_EGG_DEFAULT_HATCHING_TIME=72.000000 \
-    WORK_SPEED_RATE=1.000000 \
-    AUTO_SAVE_SPAN=30.000000 \
-    IS_MULTIPLAY=false \
-    IS_PVP=false \
-    HARDCORE=false \
-    PAL_LOST=false \
-    CHARACTER_RECREATE_IN_HARDCORE=false \
-    CAN_PICKUP_OTHER_GUILD_DEATH_PENALTY_DROP=false \
-    ENABLE_NON_LOGIN_PENALTY=true \
-    ENABLE_FAST_TRAVEL=true \
-    IS_START_LOCATION_SELECT_BY_MAP=true \
-    EXIST_PLAYER_AFTER_LOGOUT=false \
-    ENABLE_DEFENSE_OTHER_GUILD_PLAYER=false \
-    INVISBIBLE_OTHER_GUILD_BASE_CAMP_AREA_FX=false \
-    BUILD_AREA_LIMIT=false \
     ITEM_WEIGHT_RATE=1.000000 \
-    COOP_PLAYER_MAX_NUM=4 \
-    MAX_PLAYERS=32 \
-    SERVER_NAME="wine-docker-generated-###RANDOM###" \
-    SERVER_DESCRIPTION="Palworld-Wine-Server running in Docker by jammsen and ripps" \
-    ADMIN_PASSWORD=adminPasswordHere \
-    SERVER_PASSWORD=serverPasswordHere \
-    PUBLIC_PORT=8211 \
-    PUBLIC_IP= \
-    QUERY_PORT=27015 \
-    RCON_ENABLED=true \
-    RCON_PORT=25575 \
-    REGION= \
-    USEAUTH=true \
-    BAN_LIST_URL=https://api.palworldgame.com/api/banlist.txt \
-    RESTAPI_ENABLED=true \
-    RESTAPI_PORT=8212 \
-    SHOW_PLAYER_LIST=false \
-    CHAT_POST_LIMIT_PER_MINUTE=10 \
-    CROSSPLAY_PLATFORMS="(Steam,Xbox,PS5,Mac)" \
-    ENABLE_WORLD_BACKUP=false \
-    LOG_FORMAT_TYPE=Text \
+    EQUIPMENT_DURABILITY_DAMAGE_RATE=1.000000 \
+    ITEM_CONTAINER_FORCE_MARK_DIRTY_INTERVAL=1.000000 \
+    ITEM_CORRUPTION_MULTIPLIER=1.000000 \
+    # PalWorldSettings.ini - World & Exploration
+    ENABLE_FAST_TRAVEL=true \
+    ENABLE_FAST_TRAVEL_ONLY_BASE_CAMP=false \
+    IS_START_LOCATION_SELECT_BY_MAP=true \
+    CAN_PICKUP_OTHER_GUILD_DEATH_PENALTY_DROP=false \
     SUPPLY_DROP_SPAN=180 \
-    ENABLE_PREDATOR_BOSS_PAL=true \
-    MAX_BUILDING_LIMIT_NUM=0 \
     SERVER_REPLICATE_PAWN_CULL_DISTANCE=15000.000000 \
     ALLOW_GLOBAL_PALBOX_EXPORT=true \
     ALLOW_GLOBAL_PALBOX_IMPORT=false \
-    EQUIPMENT_DURABILITY_DAMAGE_RATE=1.000000 \
-    ITEM_CONTAINER_FORCE_MARK_DIRTY_INTERVAL=1.000000
+    ENABLE_WORLD_BACKUP=false \
+    AUTO_SAVE_SPAN=30.000000 \
+    LOG_FORMAT_TYPE=Text \
+    BLOCK_RESPAWN_TIME=5.000000 \
+    RESPAWN_PENALTY_DURATION_THRESHOLD=0.000000 \
+    RESPAWN_PENALTY_TIME_SCALE=2.000000 \
+    # PalWorldSettings.ini - Randomizer
+    RANDOMIZER_TYPE=None \
+    RANDOMIZER_SEED="" \
+    IS_RANDOMIZER_PAL_LEVEL_RANDOM=false \
+    # PalWorldSettings.ini - Other
+    IS_MULTIPLAY=false \
+    DENY_TECHNOLOGY_LIST=""
     
 EXPOSE 8211/udp
 EXPOSE 8212/tcp
@@ -220,11 +237,12 @@ EXPOSE 25575/tcp
 EXPOSE 27015/tcp
 
 # Install minimum required packages for dedicated server
-COPY --from=rconclibuilder /build/gorcon /usr/local/bin/rcon
 COPY --from=supercronicverify /usr/local/bin/supercronic /usr/local/bin/supercronic
+COPY --from=tianon/gosu /gosu /usr/local/bin/gosu
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends --no-install-suggests \
+    gettext-base \
 	procps \
 	xdg-user-dirs \
 	locales \
@@ -274,20 +292,30 @@ RUN apt-get autoremove -y --purge \
 #RUN groupadd --gid $PGID steam
 #RUN useradd --uid $PUID --gid $PGID -M steam
 
-COPY --chmod=755 entrypoint.sh /
-COPY --chmod=755 scripts/ /scripts
-COPY --chmod=755 includes/ /includes
-COPY --chmod=644 configs/rcon.yaml /home/steam/steamcmd/rcon.yaml
-COPY --chmod=644 configs/PalWorldSettings.ini.template /
-COPY --chmod=755 gosu-amd64 /usr/local/bin/gosu
+COPY entrypoint.sh /
+COPY scripts/ /scripts
+COPY includes/ /includes
+COPY configs/PalWorldSettings.ini.template /
+
+RUN chmod 755 /entrypoint.sh \
+    && chmod -R 755 /scripts \
+    && chmod -R 755 /includes \
+    && chmod 644 /PalWorldSettings.ini.template
 
 RUN mkdir -p "$BACKUP_PATH" \
     && ln -s /scripts/backupmanager.sh /usr/local/bin/backup \
-    && ln -s /scripts/rconcli.sh /usr/local/bin/rconcli \
+    && ln -s /scripts/restapicli.sh /usr/local/bin/restapicli \
     && ln -s /scripts/restart.sh /usr/local/bin/restart \
-    && ln -s /scripts/update.sh /usr/local/bin/update \
-    && gosu --version \
+    && printf '#!/bin/bash\nexec /home/steam/steamcmd/steamcmd.sh "$@"\n' > /usr/local/bin/steamcmd \
+    && chmod 755 /usr/local/bin/steamcmd
+
+RUN gosu --version \
     && gosu nobody true
+
+RUN restapicli --version
+
+RUN supercronic --version
+
 
 VOLUME ["${GAME_ROOT}"]
 

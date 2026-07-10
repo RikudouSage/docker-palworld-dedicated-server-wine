@@ -1,19 +1,36 @@
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/M4M81TUBKF)
+
 # Docker - Palworld Dedicated Server Wine
 
-This is a modified version of [docker-palworld-dedicated-server](https://github.com/jammsen/docker-palworld-dedicated-server) by jammsen to use the Windows version the Palworld server instead of Linux. I've tried my best to make everything else from the previous repository work in this version, but there will probably be some incompatibilities.
+This is a modified version of a linux palworld server to use the Windows version the Palworld server instead of Linux. I've tried my best to make everything else from the previous repository work in this version, but there will probably be some incompatibilities.
 ___
 
 [![Build-Status develop](https://github.com/ripps818/docker-palworld-dedicated-server-wine/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/ripps818/docker-palworld-dedicated-server-wine/actions/workflows/docker-publish.yml)
-[![Discord](https://img.shields.io/discord/532141442731212810?logo=discord&label=Discord&link=https%3A%2F%2Fdiscord.gg%2F7tacb9Q6tj)](https://discord.gg/7tacb9Q6tj)
-
-> [!TIP]
-> Do you want to chat with the community?
->
-> **[Join us on Discord](https://discord.gg/7tacb9Q6tj)**
 
 This Docker image includes a Palworld Dedicated Server based on Wine and Docker.
 
+
 ___
+
+> [!WARNING]
+> **Heads-up — RCON has been removed.** This image no longer uses RCON for any container tooling. All server management (player detection, backups, restarts, CLI) now runs via the Palworld REST API.
+> - `RCON_ENABLED` now defaults to `false` — this only controls the game server INI setting, not container functionality.
+> - Make sure `RESTAPI_ENABLED=true` is set in your `default.env`.
+> - See the [Changelog](#changelog) for the full migration guide and renamed environment variables.
+
+___
+
+> [!CAUTION]
+> **Public Service Announcement — Custom Script Feature**
+>
+> After many community requests, this image now supports running a custom script before the server starts.
+> This feature is entirely **opt-in** and is controlled by the `CUSTOM_SCRIPT_ENABLED` environment variable, which defaults to `false`.
+>
+> **This image will never ship with a custom script of any kind.**
+>
+> If you come across a Docker image that appears to be this one but includes a bundled custom script, please be careful — it is not this image and I have no affiliation with it.
+>
+> This feature was added at the request of the community. While I am glad to offer the option, I will not be providing support for it, and I refuse to accept **any liability** for any harm, data loss, corruption, or security issues that may result from its use. Please use it at your own discretion. — Public Service Announcement.
 
 ## Table of Contents
 
@@ -23,13 +40,12 @@ ___
   - [Requirements](#requirements)
   - [Minimum system requirements](#minimum-system-requirements)
   - [Changelog](#changelog)
-  - [Credits / Shoutout / Contributions](#credits--shoutout--contributions)
   - [Getting started](#getting-started)
   - [Installing Mods](#installing-mods)
   - [Environment variables](#environment-variables)
   - [Docker-Compose examples](#docker-compose-examples)
-    - [Gameserver with RCON-CLI-Tool](#gameserver-with-rcon-cli-tool)
-  - [Run RCON commands](#run-rcon-commands)
+    - [Gameserver with REST API](#gameserver-with-rest-api)
+  - [Run REST API commands](#run-rest-api-commands)
   - [Backup Manager](#backup-manager)
   - [Webhook integration](#webhook-integration)
     - [Supported events](#supported-events)
@@ -51,7 +67,7 @@ If you need support for this Docker image:
 - Feel free to create a new issue.
   - You can reference other issues if you're experiencing a similar problem via #issue-number.
 - Follow the instructions and answer the questions of people who are willing to help you.
-- Once your issue is resolved, please close it and please consider giving this repo and the [Docker-Hub repository](https://hub.docker.com/repository/docker/jammsen/palworld-dedicated-server) a star.
+- Once your issue is resolved, please close it and please consider giving this repo a star.
 - Please note that any issue that has been inactive for a week will be closed due to inactivity.
 
 Please avoid:
@@ -75,12 +91,6 @@ To run this Docker image, you need a basic understanding of Docker, Docker-Compo
 
 You can find the [changelog here](CHANGELOG.md)
 
-## Credits / Shoutout / Contributions
-
-This 2 persons helped a lot along to way and made me and this project better! So if you do not like my version of the Docker image or looking for other features, feel free to check out the following 2 images:
-- [@thejcpalma](https://github.com/thejcpalma) - [https://github.com/thejcpalma/palworld-dedicated-server-docker](https://github.com/thejcpalma/palworld-dedicated-server-docker) - [https://hub.docker.com/r/thejcpalma/palworld-dedicated-server](https://hub.docker.com/r/thejcpalma/palworld-dedicated-server) - ❤️🫡
-- [@thijsvanloef](https://github.com/thijsvanloef) - [https://github.com/thijsvanloef/palworld-server-docker](https://github.com/thijsvanloef/palworld-server-docker) - [https://hub.docker.com/r/thijsvanloef/palworld-server-docker](https://hub.docker.com/r/thijsvanloef/palworld-server-docker) - ❤️🫡
-
 ## Getting started
 
 1. Create a `game` sub-directory on your Docker-Node in your game-server-directory 
@@ -88,7 +98,7 @@ This 2 persons helped a lot along to way and made me and this project better! So
    - This directory will be used to store the game server files, including configs and savegames
    - In older versions we asked you to setup permissions via CHMOD or CHOWN, this should not be needed anymore!
 2. Set up Port-Forwarding or NAT for the ports in the Docker-Compose file
-3. Pull the latest version of the image with `docker pull jammsen/palworld-dedicated-server:latest`
+3. Pull the latest version of the image with `docker pull ghcr.io/ripps818/palworld-dedicated-server-wine:latest`
 4. Download the [docker-compose.yml](docker-compose.yml) and [default.env](default.env)
 5. Set up the `docker-compose.yml` and `default.env` to your liking
    - Make sure you setup PUID and PGID according to the user you want to use
@@ -118,42 +128,106 @@ See [this file](/docs/ENV_VARS.md) for the documentation
 
 ## Docker-Compose examples
 
-### Gameserver with RCON-CLI-Tool
+### Gameserver with REST API
 
-See [example docker-compose.yml](docker-compose.yml).
+<!-- compose-start -->
+```yaml
+networks:
+  palworld:
 
-## Run RCON commands
+services:
+  palworld-dedicated-server:
+    container_name: palworld-wine-server
+    image: ghcr.io/ripps818/docker-palworld-dedicated-server-wine:latest
+    restart: unless-stopped
+    logging:
+      driver: "local"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    ports:
+      - target: 8211 # Gamerserver port inside of the container
+        published: 8211 # Gamerserver port on your host
+        protocol: udp
+        mode: host
+      - target: 8212 # Gameserver API port inside of the container
+        published: 8212 # Gameserver API port on your host
+        protocol: tcp
+        mode: host
+      - target: 25575 # RCON port inside of the container
+        published: 25575 # RCON port on your host
+        protocol: tcp
+        mode: host
+      - target: 27015 # Query port inside of the container
+        published: 27015 # Query port on your host
+        protocol: tcp
+    env_file:
+      - ./default.env
+    volumes:
+      - ./game:/palworld
+    networks:
+      - palworld
+
+```
+<!-- compose-end -->
+
+## Run REST API commands
 
 > [!NOTE]
-> Please research the RCON-Commands on the official source: https://tech.palworldgame.com/settings-and-operation/commands
+> Please research the REST API commands on the official source: https://docs.palworldgame.com/category/rest-api
 
-You can use `docker exec palworld-wine-server rconcli <command>` right on your terminal/shell.
+You can use `docker exec palworld-wine-server restapicli <command>` right on your terminal/shell.
 
 ```shell
-$ docker exec palworld-wine-server rconcli showplayers
-name,playeruid,steamid
+$ docker exec palworld-wine-server restapicli players
+> Players: {"players": [...]}
 
-$ docker exec palworld-wine-server rconcli info
-Welcome to Pal Server[v0.1.4.1] jammsen-docker-generated-20384
+$ docker exec palworld-wine-server restapicli info
+> Server info: {"version": "v0.7.3.90464", "servername": "...", ...}
 
-$ docker exec palworld-wine-server rconcli save
-Complete Save
+$ docker exec palworld-wine-server restapicli metrics
+> Metrics: {"currentplayernum": 1, "serverfps": 120, ...}
+
+$ docker exec palworld-wine-server restapicli save
+> Saving world...
+> World saved.
+
+$ docker exec palworld-wine-server restapicli announce "Hello players!"
+> Announced: Hello players!
+
+$ docker exec palworld-wine-server restapicli kick steam_76000000000000123 "Goodbye!"
+> Kicked: steam_76000000000000123
+
+$ docker exec palworld-wine-server restapicli ban steam_76000000000000123 "You are banned."
+> Banned: steam_76000000000000123
+
+$ docker exec palworld-wine-server restapicli unban steam_76000000000000123
+> Unbanned: steam_76000000000000123
+
+$ docker exec palworld-wine-server restapicli banlist
+> Ban list (2 entries):
+steam_76000000000000123
+steam_76000000000000456
+
+$ docker exec palworld-wine-server restapicli shutdown 60 "Server restarting soon"
+> Shutting down server in 60s...
+> Shutdown issued.
 ```
 
 ## Backup Manager
 
 > [!WARNING]
-> If RCON is disabled, the backup manager won't do saves via RCON before creating a backup and will report warnings.
+> If `RESTAPI_ENABLED` is set to `false`, the backup manager will not announce backup start/success/failure in-game and will not trigger a world save before creating a backup.
 > This means that the backup will be created from the last auto-save of the server.
 > This can lead to data-loss and/or savegame corruption.
 >
-> **Recommendation:** Please make sure that RCON is enabled before using the backup manager.
+> **Recommendation:** Please make sure that `RESTAPI_ENABLED=true` is set before using the backup manager.
 
 > [!WARNING]
-> Please use in the following part always the `-user steam` option or your files will written as root
+> Please use in the following part always the `--user steam` option or your files will be written as root
 
 
-Usage: `docker exec -user steam palworld-wine-server backup [command] [arguments]`
+Usage: `docker exec --user steam palworld-wine-server backup [command] [arguments]`
 
 | Command | Argument           | Required/Optional | Default Value                     | Values           | Description                                                                                                                                                                          |
 | ------- | ------------------ | ----------------- | --------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -164,25 +238,25 @@ Usage: `docker exec -user steam palworld-wine-server backup [command] [arguments
 Examples:
 
 ```shell
-$ docker exec --user steam palworld-wine-server backup
-> Backup 'saved-20240203_032855.tar.gz' created successfully.
+$ docker exec --user steam palworld-wine-server backup create
+>>> Backup 'saved-20240203_032855.tar.gz' created successfully
 ```
 
 ```shell
 $ docker exec --user steam palworld-wine-server backup list
-> Listing 2 backup file(s)!
+>>> Listing 2 backup file(s)!
 2024-02-03 03:28:55 | saved-20240203_032855.tar.gz
 2024-02-03 03:28:00 | saved-20240203_032800.tar.gz
 ```
 
 ```shell
-$ docker exec --user steam palworld-wine-server backup_clean 3
-> 1 backup(s) cleaned, keeping 2 backups(s).
+$ docker exec --user steam palworld-wine-server backup clean 3
+>>> 1 backup(s) cleaned, keeping 2 backup(s).
 ```
 
 ```shell
-$ docker exec --user steam palworld-wine-server backup_list   
-> Listing 1 out of backup 2 file(s).
+$ docker exec --user steam palworld-wine-server backup list 1
+>>> Listing 1 out of 2 backup file(s).
 2024-02-03 03:30:00 | saved-20240203_033000.tar.gz
 ```
 
@@ -248,5 +322,5 @@ A Helm chart to deploy this container can be found at [palworld-helm](https://gi
 
 - CM2Network SteamCMD - Debian-based (Officially recommended by Valve - https://developer.valvesoftware.com/wiki/SteamCMD#Docker)
 - Supercronic - https://github.com/aptible/supercronic
-- rcon-cli - https://github.com/gorcon/rcon-cli
+- jq - https://jqlang.org/
 - Palworld Dedicated Server (APP-ID: 2394010 - https://steamdb.info/app/2394010/config/)

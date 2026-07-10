@@ -16,7 +16,7 @@ function schedule_restart() {
     if [[ -f "${GAME_ROOT}/PLAYER_DETECTION.PID" ]]; then
         export PLAYER_DETECTION_PID=$(<"${GAME_ROOT}/PLAYER_DETECTION.PID")
     fi
-    if [[ -n $WEBHOOK_ENABLED ]] && [[ $WEBHOOK_ENABLED == "true" ]]; then
+    if [[ -n $WEBHOOK_ENABLED ]] && [[ "${WEBHOOK_ENABLED,,}" == "true" ]]; then
         send_restart_planned_notification
     fi
 	
@@ -29,43 +29,41 @@ function schedule_restart() {
 	fi
 
     for ((counter=$countdown; counter>=1; counter--)); do
-        if [[ -n $RCON_ENABLED ]] && [[ $RCON_ENABLED == "true" ]]; then
-
+        if [[ -n $RESTAPI_ENABLED ]] && [[ "${RESTAPI_ENABLED,,}" == "true" ]]; then
             if check_is_server_empty; then
                 ew ">>> Server is empty, restarting now"
-                if [[ -n $WEBHOOK_ENABLED ]] && [[ $WEBHOOK_ENABLED == "true" ]]; then
+                if [[ -n $WEBHOOK_ENABLED ]] && [[ "${WEBHOOK_ENABLED,,}" == "true" ]]; then
                     send_restart_now_notification
                 fi
                 break
             else
                 ew ">>> Server has still players"
             fi
-			if [[ -n $RESTART_ANNOUNCE_MESSAGES_ENABLED ]] && [[ $RESTART_ANNOUNCE_MESSAGES_ENABLED == "true" ]]; then
-				rconcli "broadcast $(get_time) AUTOMATIC RESTART IN $counter MINUTES"
-		    fi
+            if [[ -n $RESTART_ANNOUNCE_MESSAGES_ENABLED ]] && [[ "${RESTART_ANNOUNCE_MESSAGES_ENABLED,,}" == "true" ]]; then
+                restapi_announce "$(get_time) AUTOMATIC RESTART IN $counter MINUTES"
+            fi
         fi
-        if [[ -n $RESTART_DEBUG_OVERRIDE ]] && [[ $RESTART_DEBUG_OVERRIDE == "true" ]]; then
+        if [[ -n $RESTART_DEBUG_OVERRIDE ]] && [[ "${RESTART_DEBUG_OVERRIDE,,}" == "true" ]]; then
             sleep 1
         else
             sleep 60
         fi
     done
 
-    if [[ -n $RCON_ENABLED ]] && [[ $RCON_ENABLED == "true" ]]; then
-        if [[ -n $RESTART_ANNOUNCE_MESSAGES_ENABLED ]] && [[ $RESTART_ANNOUNCE_MESSAGES_ENABLED == "true" ]]; then
-			rconcli "broadcast $(get_time) Saving world before restart..."
+    if [[ -n $RESTAPI_ENABLED ]] && [[ "${RESTAPI_ENABLED,,}" == "true" ]]; then
+        if [[ -n $RESTART_ANNOUNCE_MESSAGES_ENABLED ]] && [[ "${RESTART_ANNOUNCE_MESSAGES_ENABLED,,}" == "true" ]]; then
+            restapi_announce "$(get_time) Saving world before restart..."
+            restapi_save
+            restapi_announce "$(get_time) Saving done"
+        else
+            restapi_save
         fi
-		rconcli 'save'
-		if [[ -n $RESTART_ANNOUNCE_MESSAGES_ENABLED ]] && [[ $RESTART_ANNOUNCE_MESSAGES_ENABLED == "true" ]]; then
-			rconcli "broadcast $(get_time) Saving done"
+        sleep 15
+        if [[ -n "${PLAYER_DETECTION_PID}" ]]; then
+            kill -SIGTERM "${PLAYER_DETECTION_PID}" 2>/dev/null
         fi
-		sleep 15
-		if [[ -n "${PLAYER_DETECTION_PID}" ]]; then
-			kill -SIGTERM "${PLAYER_DETECTION_PID}"
-		fi
-		rconcli "Shutdown 10"
-
-        if [[ -n $WEBHOOK_ENABLED ]] && [[ $WEBHOOK_ENABLED == "true" ]]; then
+        restapi_shutdown 10 "$(get_time) Server restarting..."
+        if [[ -n $WEBHOOK_ENABLED ]] && [[ "${WEBHOOK_ENABLED,,}" == "true" ]]; then
             send_stop_notification
         fi
     else
